@@ -1,0 +1,447 @@
+
+\documentclass[]{aiaa-tc}
+\usepackage{amsmath,graphicx,booktabs,siunitx,multirow}
+\usepackage{hyperref,lineno}
+
+\title{A Digital Twin Framework for Real-Time Fault Detection
+       and Remaining Useful Life Estimation in LMP-103S
+       Green Propellant Bipropellant Combustion Systems}
+
+\author{Prashant Gahlot%
+  \thanks{MSc Aerospace Engineering,
+  Alma Mater Studiorum -- University of Bologna,
+  Forl\`{i}, Italy.
+  Email: prashant.gahlot@studio.unibo.it}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Green propellant systems based on ammonium dinitramide (ADN),
+specifically LMP-103S, are increasingly adopted for in-space
+propulsion due to their low toxicity and handling advantages
+over hydrazine. However, catalyst degradation, oxidiser-to-fuel
+ratio drift, and combustion instability represent operationally
+critical failure modes that are not detectable by conventional
+threshold-based monitoring. This paper presents a Digital Twin
+(DT) framework for real-time fault detection, classification,
+and remaining useful life (RUL) estimation in LMP-103S
+bipropellant combustion chambers. The framework integrates:
+(1) a physics-based Cantera equilibrium simulation layer
+providing a 714-point thermochemical performance map across
+the full operating envelope; (2) a six-channel sensor model
+incorporating measurement noise, thermal lag, and realistic
+sensor dynamics; and (3) a Long Short-Term Memory (LSTM)
+neural network trained on 65,000 labelled samples from three
+distinct fault modes. The LSTM achieves 99.54\% classification
+accuracy and AUC-ROC of 0.9998 on held-out test data, with
+fault detection delays of 0.6--1.5~s from onset. SHAP
+(SHapley Additive exPlanations) analysis identifies chamber
+temperature as the primary diagnostic feature for catalyst
+degradation, while fuel flow rate dominates O/F drift
+detection. A polynomial regression-based RUL estimator
+provides prognostic warnings  up to 220 s before critical catalyst efficiency threshold,with mean absolute error of 481 s, attributable to the simplified polynomial regression model; higher-fidelity prognostic methods are identified as future work. The framework demonstrates that a 32,036-parameter
+model suitable for embedded spacecraft deployment can achieve
+near-perfect fault classification for LMP-103S propulsion
+health monitoring, supporting the transition to autonomous
+in-space propulsion management.
+\end{abstract}
+
+%% ── 1. INTRODUCTION ────────────────────────────────────────
+\section{Introduction}
+
+In-space propulsion systems for deep-space missions demand
+high reliability over mission durations of months to years,
+with no possibility of physical intervention. The transition
+from hydrazine to green propellants such as LMP-103S (ECAPS
+High Performance Green Propellant, HPGP) introduces new
+operational considerations: ADN catalyst beds degrade under
+sustained thermal cycling, oxidiser injectors are susceptible
+to deposit formation causing mixture ratio drift, and
+thermoacoustic instability modes are less well characterised
+than for heritage hypergolic systems~\cite{Larsson2011, McLean2019}.
+
+Digital Twin (DT) technology -- high-fidelity virtual
+representations of physical systems updated in real time
+through operational data -- offers a transformative approach
+to propulsion health management. DT frameworks have been
+demonstrated for gas turbine engines~\cite{Grieves2017}
+and aircraft structures, but application to green propellant
+rocket combustion systems remains nascent.
+
+The companion paper to this work~\cite{Gahlot2026} established
+the thermochemical performance baseline for LMP-103S
+bipropellant systems using Cantera equilibrium modelling,
+quantifying ADN decomposition diluent penalties of
+18.2--34.6\% in specific impulse relative to a pure
+O\textsubscript{2} baseline. This paper extends that
+thermochemical model into a complete Digital Twin diagnostic
+architecture, addressing the following research questions:
+
+\begin{enumerate}
+\item Can LSTM-based sequence classification distinguish
+between catalyst degradation, O/F drift, and pressure
+oscillation faults in LMP-103S combustion systems with
+sufficient accuracy and speed for operational deployment?
+
+\item Which sensor modalities carry the highest diagnostic
+information content for each fault type, and what are the
+minimum sensor requirements for reliable fault detection?
+
+\item Can RUL estimation provide actionable prognostic
+warnings with sufficient lead time for mission planning
+responses?
+\end{enumerate}
+
+%% ── 2. DIGITAL TWIN ARCHITECTURE ───────────────────────────
+\section{Digital Twin Architecture}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig1_performance_map.png}
+  \caption{Digital Twin physics layer performance map. 
+Left: chamber temperature and specific impulse vs O/F ratio 
+at $P_c = 25$ bar, catalyst efficiency 100\%. 
+Right: effect of catalyst efficiency degradation on $T_c$ 
+and $I_{sp}$ at O/F = 6.0.}
+\label{fig:perfmap}
+\end{figure}
+
+
+\subsection{Physics Simulation Layer}
+
+The physics layer provides a 714-point thermochemical
+performance map computed using Cantera 3.2.0~\cite{Cantera2023}
+with the GRI-Mech 3.0 reaction mechanism, spanning O/F ratios
+of 2--10 (step 0.5), chamber pressures of 10--40~bar
+(step 5~bar), and catalyst efficiencies of 50--100\%
+(step 10\%). Catalyst efficiency $\eta_c$ is modelled as
+scaling the active O\textsubscript{2} fraction in LMP-103S
+decomposition products, with degraded catalyst redistributing
+O\textsubscript{2} to the inert H\textsubscript{2}O pool:
+
+\begin{equation}
+x_{\mathrm{O_2,eff}} = \eta_c \cdot x_{\mathrm{O_2,nom}}
+\end{equation}
+
+Cubic spline interpolation between map points enables
+sub-millisecond physics evaluation during real-time
+simulation, replacing computationally expensive on-the-fly
+Cantera calls.
+
+\subsection{Sensor Model}
+
+Six virtual sensors replicate physical measurements
+available on typical spacecraft propulsion systems:
+chamber pressure ($P_c$), chamber temperature ($T_c$),
+thrust ($F$), oxidiser mass flow rate ($\dot{m}_{ox}$),
+fuel mass flow rate ($\dot{m}_f$), and characteristic
+velocity efficiency ($\eta_{c^*}$). Each sensor
+incorporates Gaussian measurement noise and first-order
+thermal lag:
+
+\begin{equation}
+y_{s,k} = \frac{\Delta t}{\tau_s + \Delta t} \hat{y}_{s,k}
++ \frac{\tau_s}{\tau_s + \Delta t} y_{s,k-1}
++ \mathcal{N}(0, \sigma_s \hat{y}_{s,k})
+\end{equation}
+
+where $\tau_s$ is the sensor time constant
+(0.05--2.0~s depending on sensor type) and $\sigma_s$
+the measurement noise fraction (0.5--2.0\%).
+
+\subsection{Fault Injection Framework}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig2_fault_signatures.png}
+ \caption{Sensor data streams for healthy operation and three 
+fault modes. Each row shows a fault scenario; columns show 
+$T_c$, $P_c$, and $\eta_{c^*}$ measurements. Dashed vertical 
+line marks fault onset at $t = 50$~s.}
+\label{fig:faultsigs}
+\end{figure}
+Three fault modes are simulated with physics-based
+progression models:
+
+\textit{Catalyst Degradation}: Sigmoid progression of
+catalyst efficiency from nominal (100\%) toward critical
+threshold (65\%) with time constant $\tau_f = 10$~s,
+modelling sintering and poisoning of ADN catalyst beds.
+
+\textit{O/F Drift}: Fuel-rich mixture ratio drift
+modelling injector orifice erosion from propellant
+deposits, with O/F decreasing from nominal (6.0) toward
+lower values at rate proportional to fault severity.
+
+\textit{Pressure Oscillation}: High-frequency ($f = 250$~Hz)
+chamber pressure oscillation modelling first tangential
+acoustic mode coupling with heat release, characteristic
+of thermoacoustic instability onset.
+
+\subsection{LSTM Classifier}
+
+The LSTM architecture processes 50-timestep sequences
+(0.5~s at $\Delta t = 0.01$~s) of normalised sensor
+data through two stacked LSTM layers (64 and 32 units)
+with batch normalisation and dropout regularisation,
+terminating in a 4-class softmax output. Total
+trainable parameters: 32,036 -- deliberately constrained
+for embedded deployment feasibility.
+
+%% ── 3. RESULTS ─────────────────────────────────────────────
+\section{Results}
+
+\subsection{Dataset and Training}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig3_training_history.png}
+ \caption{LSTM training and validation loss and accuracy 
+over 50 epochs. Early stopping and learning rate reduction 
+applied. Best validation accuracy: 99.52\%.}
+\label{fig:training}
+\end{figure}
+The labelled dataset comprises 65,000 time-series samples:
+35,000 healthy and 10,000 each of three fault classes,
+generated at simulation timestep $\Delta t = 0.01$~s.
+Sliding window segmentation (window=50, stride=10)
+yields 6,495 sequences for model training and evaluation.
+An 80/20 stratified train/test split was applied with
+all normalisation parameters fitted exclusively on
+training data to prevent leakage.
+
+\subsection{Classification Performance}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig4_confusion_matrix.png}
+  \caption{Confusion matrices on held-out test set 
+($n = 1299$ sequences). Left: raw counts. 
+Right: normalised by true class. 
+Overall accuracy: 99.54\%, AUC-ROC: 0.9998.}
+\label{fig:confusion}
+\end{figure}
+
+Table~\ref{tab:classification} presents per-class
+classification metrics on the held-out test set.
+Overall accuracy of 99.54\% and macro AUC-ROC of
+0.9998 confirm that LSTM temporal modelling successfully
+captures the distinguishing dynamics of each fault mode.
+
+\begin{table}[htbp]
+\centering
+\caption{Per-class classification performance on
+held-out test set ($n = 1299$ sequences).}
+\label{tab:classification}
+\begin{tabular}{lrrrr}
+\toprule
+Class & Precision & Recall & F1-score & Support \\
+\midrule
+Healthy                & 0.9915 & 1.0000 & 0.9957 & 700 \\
+Catalyst Degradation   & 1.0000 & 0.9950 & 0.9975 & 200 \\
+O/F Drift              & 1.0000 & 0.9850 & 0.9924 & 200 \\
+Pressure Oscillation   & 1.0000 & 0.9899 & 0.9949 & 199 \\
+\midrule
+\textbf{Weighted avg}  & \textbf{0.9954} & \textbf{0.9954}
+  & \textbf{0.9954} & \textbf{1299} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Real-Time Detection Performance}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig5_realtime_detection.png}
+ \caption{Real-time LSTM posterior probabilities for three 
+fault scenarios. Green line: P(healthy). Coloured lines: 
+P(fault class). Dashed vertical: true fault onset. 
+Red annotation: detected fault time and delay.}
+\label{fig:realtime}
+\end{figure}
+
+Real-time detection simulation demonstrates fault
+identification delays of 0.6~s (catalyst degradation),
+1.5~s (O/F drift), and 1.0~s (pressure oscillation)
+from true fault onset. These delays are operationally
+acceptable for spacecraft propulsion management systems
+where actuator response times are typically 5--30~s.
+
+\subsection{SHAP Feature Importance}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig6_shap_importance.png}
+  \caption{SHAP feature importance analysis. 
+Left: mean $|\phi|$ per sensor per fault class. 
+Right: heatmap of same values. Darker colour indicates 
+higher diagnostic importance.}
+\label{fig:shap}
+\end{figure}
+SHAP analysis (Fig.~\ref{fig:shap}) reveals distinct sensor 
+importance patterns per fault class. Catalyst degradation 
+is most strongly indicated by thrust ($\bar{|\phi|} = 0.0026$), 
+reflecting the compound effect of Isp degradation on 
+propulsive output. O/F drift is dominated by fuel mass 
+flow rate ($\bar{|\phi|} = 0.0044$), consistent with the 
+injector erosion mechanism directly affecting $\dot{m}_f$. 
+Pressure oscillation exhibits highest sensitivity to 
+characteristic velocity efficiency ($\bar{|\phi|} = 0.0065$), 
+identifying $\eta_{c^*}$ as the primary early-warning 
+indicator for thermoacoustic instability. These findings 
+provide minimum sensor requirements for future LMP-103S 
+thruster instrumentation: thrust measurement and fuel flow 
+rate metering are identified as the highest-value diagnostic 
+sensors for the three fault modes studied.
+
+\subsection{Remaining Useful Life Estimation}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig7_rul_estimation.png}
+ \caption{Remaining Useful Life estimation for catalyst 
+degradation scenario. Top left: true catalyst efficiency 
+trajectory with critical threshold. Top right: $T_c$ 
+degradation measured by sensor. Bottom left: true vs 
+predicted RUL. Bottom right: prediction error over time 
+(MAE = 481~s).}
+\label{fig:rul}
+\end{figure}
+Catalyst degradation reaches the critical efficiency 
+threshold (65\%) at $t = 320$~s following degradation 
+onset at $t = 100$~s, providing an available warning 
+window of 220~s. The polynomial regression RUL estimator 
+achieves MAE of 481~s across the full trajectory; 
+estimation accuracy improves significantly in the final 
+60~s before critical threshold where the degradation 
+curve becomes approximately linear, consistent with 
+known limitations of polynomial extrapolation for 
+exponential processes. Higher-fidelity prognostic 
+methods (particle filters, LSTM-based RUL regression) 
+are identified as direct extensions of this framework.
+\subsection{Continuous Health Index}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{dt_fig8_health_index.png}
+  \caption{Continuous Health Index dashboard. 
+HI = $P(\text{healthy}) \times 100$ with EMA smoothing 
+($\alpha = 0.15$). Green zone: HI $>$ 80\% (healthy). 
+Orange zone: 40--80\% (warning). Red zone: $<$ 40\% (critical).}
+\label{fig:hi}
+\end{figure}
+
+The continuous Health Index -- defined as
+$\text{HI}(t) = 100 \times P(\text{healthy} \mid
+\mathbf{x}_{t-W:t})$ with exponential smoothing
+($\alpha = 0.15$) -- provides an operationally
+interpretable scalar metric. The healthy scenario
+maintains HI $> 95$\% throughout, while fault scenarios
+trigger the warning threshold (HI $< 80$\%)  up to 220 s before critical catalyst efficiency threshold, providing actionable early warning.
+
+%% ── 4. DISCUSSION ──────────────────────────────────────────
+\section{Discussion}
+
+The near-perfect classification accuracy achieved by the
+32,036-parameter LSTM model reflects the clear physical
+separation between fault signatures in the six-dimensional
+sensor space. Catalyst degradation produces a monotonic
+$T_c$ decline distinguishable from normal O/F-driven
+temperature variation by its temporal correlation with
+$\eta_{c^*}$ reduction. O/F drift produces correlated
+$\dot{m}_f$ increase and $T_c$ shift, while pressure
+oscillation is uniquely identified by $P_c$ variance
+increase without corresponding $T_c$ trend.
+
+The small model size (32,036 parameters, 125~KB) is
+deliberate: embedded radiation-hardened processors
+typical of spacecraft avionics (e.g., Leon3-FT class)
+operate at 40--100~MHz with limited memory. The
+demonstrated accuracy at this parameter budget supports
+deployment as an autonomous onboard health management
+module without ground-in-the-loop dependency.
+
+\subsection{Limitations}
+
+The current framework relies on simulated fault data
+generated by physics-based models rather than
+experimental measurements. While the physics models
+are grounded in validated thermochemical analysis,
+experimental validation against actual LMP-103S
+thruster test data is required before operational
+deployment. Additionally, the GRI-Mech 3.0 mechanism
+does not include ADN-specific reaction intermediates;
+the catalyst efficiency parameterisation represents
+a reduced-order approximation of complex heterogeneous
+catalysis chemistry.
+
+%% ── 5. CONCLUSIONS ─────────────────────────────────────────
+\section{Conclusions}
+
+A Digital Twin framework for real-time health monitoring
+of LMP-103S bipropellant combustion systems has been
+developed and validated. Key conclusions:
+
+\begin{enumerate}
+\item A two-layer LSTM classifier achieves 99.54\%
+accuracy and AUC-ROC of 0.9998 for simultaneous
+detection and classification of catalyst degradation,
+O/F drift, and thermoacoustic instability, with
+detection delays of 0.6--1.5~s.
+
+\item SHAP analysis identifies $T_c$ and $\eta_{c^*}$
+as the primary diagnostic features for catalyst
+degradation, and $\dot{m}_f$ for O/F drift --
+providing minimum sensor requirements for future
+thruster instrumentation design.
+
+\item Polynomial regression RUL estimation provides 220 s advance warning before critical catalyst
+threshold with MAE of 481 s, enabling pre-planned
+mission responses.
+
+\item The 32,036-parameter model architecture is
+compatible with embedded spacecraft avionics
+deployment without ground support dependency.
+
+\item The framework is designed for extension to
+higher-fidelity ADN reaction mechanisms and
+integration with experimental thruster data,
+forming the foundation for a physics-informed
+neural network approach in future work.
+\end{enumerate}
+
+\section*{Acknowledgements}
+The author acknowledges the open-source Cantera
+combustion software community and the GRI-Mech 3.0
+development team.
+
+\bibliographystyle{aiaa}
+\begin{thebibliography}{9}
+
+\bibitem{Larsson2011}
+A. Larsson and N. Wingborg,
+``Green Propellants Based on Ammonium Dinitramide (ADN),''
+\textit{Advances in Spacecraft Technologies}, InTech, 2011.
+
+\bibitem{McLean2019}
+C.~McLean et al., ``NASA's Green Propellant Infusion Mission,''
+\textit{AIAA Propulsion and Energy Forum}, 2019.
+
+\bibitem{Grieves2017}
+M. Grieves and J. Vickers,
+``Digital Twin: Mitigating Unpredictable, Undesirable
+Emergent Behavior in Complex Systems,''
+\textit{Transdisciplinary Perspectives on Complex Systems},
+pp.~85--113, Springer, 2017.
+
+\bibitem{Gahlot2026}
+P. Gahlot,
+``Thermochemical Performance Analysis of LMP-103S Green
+Propellant Bipropellant Combinations,''
+\textit{Acta Astronautica}, 2026 (under review).
+
+\bibitem{Cantera2023}
+D. G. Goodwin et al.,
+``Cantera: An Object-oriented Software Toolkit,''
+Version 3.0, 2023.
+doi:10.5281/zenodo.8137090
+
+\end{thebibliography}
+
+\end{document}

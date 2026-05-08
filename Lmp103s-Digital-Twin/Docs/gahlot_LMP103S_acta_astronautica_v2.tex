@@ -1,0 +1,526 @@
+
+\documentclass[review]{elsarticle}
+\usepackage{lineno,hyperref,amsmath,graphicx,booktabs,siunitx,multirow}\modulolinenumbers[5]
+
+\journal{Acta Astronautica}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Thermochemical Performance Analysis of LMP-103S 
+Green Propellant Bipropellant Combinations: 
+Quantification of ADN Decomposition Diluent Penalties 
+via Cantera Equilibrium Modelling}
+
+\author[bologna]{Prashant Gahlot}
+\address[bologna]{Department of Industrial Engineering (DIN), 
+Alma Mater Studiorum -- University of Bologna, 
+Forl\`{i}, Italy}
+\ead{prashant.gahlot@studio.unibo.it}
+
+\begin{abstract}
+Ammonium dinitramide (ADN)-based green propellants, 
+specifically LMP-103S (HPGP), represent a promising 
+hydrazine replacement for in-space propulsion. 
+However, their catalytic decomposition produces significant 
+inert diluents -- nitrogen (N\textsubscript{2}, 37.9\% 
+mole fraction) and water vapour (H\textsubscript{2}O, 
+45.5\%) -- that reduce effective combustion performance 
+when used as bipropellant oxidisers. 
+This study presents a systematic thermochemical analysis 
+of LMP-103S as oxidiser with three hydrocarbon fuels 
+(ethanol, RP-1, liquid methane) using Cantera 3.2.0 
+open-source combustion software with the GRI-Mech 3.0 
+reaction mechanism. 
+Results are compared against a pure O\textsubscript{2} 
+baseline to quantify the diluent performance penalty 
+across O/F ratios of 2--10 and chamber pressures of 
+10--40 bar. 
+Key findings indicate average specific impulse penalties 
+of 18.2\%, 26.9\%, and 34.6\% for ethanol, RP-1, and 
+liquid methane respectively. 
+A Monte Carlo uncertainty analysis (N=500) demonstrates 
+model robustness with coefficient of variation below 
+4.5\% across all performance metrics. 
+Mission-level analysis using the Tsiolkovsky rocket equation 
+quantifies propellant mass penalties for representative 
+deep-space trajectories, providing design guidance for 
+green propellant adoption in volume- and mass-constrained 
+spacecraft. 
+The results identify ethanol at high O/F ratios as the 
+optimal fuel pairing for LMP-103S, achieving Isp penalties 
+below 1\% at O/F=10 Additionally, a counter-intuitive volumetric performance advantage 
+is identified for ethanol/LMP-103S at high O/F ratios, where 
+elevated oxidiser density yields density impulse exceeding 
+pure O\textsubscript{2} baseline by 6.8\%.
+\end{abstract}
+
+\begin{keyword}
+Green propellants \sep LMP-103S \sep ADN \sep 
+Bipropellant \sep Thermochemical analysis \sep 
+Cantera \sep Diluent penalty \sep Deep-space propulsion
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+%% ── 1. INTRODUCTION ────────────────────────────────────────
+\section{Introduction}
+
+The global push toward sustainable space access has 
+accelerated research into hydrazine-replacement green 
+propellants. Environmental and regulatory concerns, 
+including potential EU REACH restrictions on hydrazine 
+handling, have motivated development of ADN-based 
+formulations such as LMP-103S (ECAPS HPGP) and 
+AF-M315E (ASCENT) \cite{Larsson2011, Bombelli2020}.
+
+LMP-103S has demonstrated successful in-orbit 
+performance through NASA's Green Propellant Infusion 
+Mission (GPIM, 2019) and ESA's PRISMA mission, 
+establishing its operational readiness as a monopropellant 
+\cite{GPIM2019}. 
+Its extension to bipropellant configurations -- using the 
+oxygen-rich decomposition products as an oxidiser source -- 
+offers potential density and toxicity advantages over 
+conventional N\textsubscript{2}O\textsubscript{4}/MMH 
+systems.
+
+However, the catalytic decomposition of ADN in LMP-103S 
+produces a gas mixture dominated by inert species: 
+approximately 37.9\% N\textsubscript{2} and 45.5\% 
+H\textsubscript{2}O by mole, with only 16.6\% active 
+O\textsubscript{2} \cite{Larsson2011}. 
+These diluents absorb thermal energy in the combustion 
+chamber, increase exhaust molecular weight, and reduce 
+effective flame temperatures -- mechanisms that have not 
+been systematically quantified for bipropellant 
+configurations with hydrocarbon fuels.
+
+Prior thermochemical analyses of green propellant systems 
+have primarily employed NASA Chemical Equilibrium with 
+Applications (CEA) code, which, while accurate for pure 
+propellant species, does not facilitate straightforward 
+sensitivity analysis or uncertainty propagation 
+\cite{Sharon2021}. 
+Furthermore, published studies have focused predominantly 
+on monopropellant performance characterisation rather 
+than bipropellant diluent effects.
+
+This paper addresses the identified gap by: (1) employing 
+Cantera 3.2.0 with GRI-Mech 3.0 to compute equilibrium 
+combustion properties for LMP-103S bipropellant systems; 
+(2) quantifying diluent performance penalties relative 
+to a pure O\textsubscript{2} baseline; (3) conducting 
+Monte Carlo uncertainty analysis to assess model 
+sensitivity; and (4) translating performance differences 
+to mission-level propellant mass penalties for 
+representative deep-space trajectories.
+
+%% ── 2. METHODOLOGY ─────────────────────────────────────────
+\section{Methodology}
+
+\subsection{LMP-103S Decomposition Model}
+
+LMP-103S (ammonium dinitramide in aqueous solution 
+with methanol and water) undergoes catalytic decomposition 
+prior to the combustion chamber. 
+Following Larsson et al. \cite{Larsson2011}, the 
+decomposition product mole fractions are:
+N\textsubscript{2}: 0.3789, H\textsubscript{2}O: 0.4554, 
+O\textsubscript{2}: 0.1657, 
+yielding an effective mixture molecular weight of 
+24.11 g/mol and an active O\textsubscript{2} mass 
+fraction of 22.0\%.
+
+\subsection{Cantera Equilibrium Model}
+
+Bipropellant combustion is modelled as a constant-enthalpy, 
+constant-pressure (HP) equilibrium process using Cantera 
+3.2.0 \cite{Cantera2023} with the GRI-Mech 3.0 reaction mechanism (53 species, 325 reactions) \cite{GRI30}.
+This approach is thermodynamically equivalent to the 
+CEA equilibrium calculation, enabling direct methodological 
+comparison.
+
+Fuel species in GRI-Mech are represented as:
+ethanol (C\textsubscript{2}H\textsubscript{5}OH) 
+via C\textsubscript{2}H\textsubscript{4} + H\textsubscript{2};
+RP-1 (C\textsubscript{12}H\textsubscript{24}) 
+via 6$\times$C\textsubscript{2}H\textsubscript{4};
+methane (CH\textsubscript{4}) directly.
+
+\subsection{Performance Parameters}
+
+Specific impulse is calculated via the characteristic 
+velocity method:
+\begin{equation}
+    I_{sp} = \frac{C_f \cdot c^*}{g_0}
+\end{equation}
+where the Vandenkerckhove thrust coefficient is:
+\begin{equation}
+    C_f = \Gamma \sqrt{\frac{2\gamma}{\gamma-1}
+    \left[1-\left(\frac{p_e}{p_c}\right)^{(\gamma-1)/\gamma}
+    \right]}
+\end{equation}
+and $\Gamma = \sqrt{\gamma}\left(\frac{2}{\gamma+1}
+\right)^{(\gamma+1)/[2(\gamma-1)]}$.
+Sea-level expansion is assumed ($p_e = 1$ bar).
+
+\subsection{Uncertainty Analysis}
+
+A Monte Carlo uncertainty analysis (N=500 samples) 
+propagates input uncertainties in LMP-103S decomposition 
+composition ($\pm$5\%), chamber pressure ($\pm$1 bar), 
+and O/F ratio ($\pm$0.2) through the equilibrium model 
+to quantify 95\% confidence intervals on performance 
+predictions.
+
+\subsection{Mission Trade Study}
+
+Propellant mass requirements for representative missions 
+are computed via the Tsiolkovsky rocket equation:
+\begin{equation}
+    m_{prop} = m_{wet}\left[1 - 
+    \exp\left(\frac{-\Delta v}{I_{sp} \cdot g_0}\right)
+    \right]
+\end{equation}
+for a 500 kg spacecraft across five mission scenarios 
+spanning LEO to deep space ($\Delta v$ = 150--1500 m/s).
+
+%% ── 3. RESULTS ─────────────────────────────────────────────
+\section{Results and Discussion}
+
+\subsection{Thermochemical Performance Comparison}
+
+Figure~\ref{fig:performance} presents chamber temperature and specific 
+impulse as functions of O/F ratio for all three fuels with LMP-103S 
+and pure O\textsubscript{2} oxidisers at $P_c = 25$ bar. LMP-103S 
+consistently yields significantly lower flame temperatures across all 
+fuel combinations and O/F ratios examined.
+
+For ethanol fuel, chamber temperatures range from 1128~K to 1965~K 
+with LMP-103S, compared to 2631--3655~K with pure O\textsubscript{2} 
+— a reduction of 25--69\% depending on O/F ratio. RP-1 exhibits 
+similar behaviour (1105--1772~K vs. 3033--3617~K), while methane shows 
+the most severe temperature suppression (908--1431~K vs. 2728--3482~K). 
+The temperature penalty is most pronounced at low O/F ratios where the 
+diluent mass fraction is highest relative to active oxygen content.
+
+Specific impulse values range from 144--188~s for LMP-103S systems 
+(methane to ethanol at O/F 2--10) compared to 189--272~s for pure 
+O\textsubscript{2} at equivalent conditions, all computed for 
+sea-level nozzle expansion ($p_e = 1$~bar).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Fig1_performance.png}
+  \caption{Thermochemical performance of LMP-103S and pure 
+  O\textsubscript{2} oxidisers with three hydrocarbon fuels at 
+  $P_c = 25$~bar. Top row: chamber temperature. 
+  Bottom row: specific impulse.}
+  \label{fig:performance}
+\end{figure}
+
+\subsection{Diluent Penalty Quantification}
+
+Figure~\ref{fig:penalty} and Table~\ref{tab:penalty} present the 
+systematic diluent penalty analysis. The mean specific impulse penalty 
+varies from 18.2\% (ethanol) to 34.6\% (methane), consistent with 
+the lower active oxygen content of LMP-103S (16.6~mol\%) versus 
+pure O\textsubscript{2} (100~mol\%).
+
+A key finding is the strong O/F dependence of the penalty. For 
+ethanol, the $I_{sp}$ penalty decreases monotonically from 39.6\% 
+at O/F~=~2 to 0.7\% at O/F~=~10. At oxidiser-rich conditions, 
+the increased oxygen availability partially compensates for N\textsubscript{2} 
+and H\textsubscript{2}O dilution, approaching pure-O\textsubscript{2} 
+performance. This behaviour identifies O/F~=~8--10 as the optimal 
+operating regime for ethanol/LMP-103S bipropellant systems.
+
+Methane demonstrates the highest sensitivity to diluent effects 
+(mean penalty 34.6\%), attributed to its lower molecular weight 
+which amplifies the relative contribution of heavier diluent species 
+(N\textsubscript{2}, MW~=~28~g/mol; H\textsubscript{2}O, MW~=~18~g/mol) 
+to exhaust molecular weight, reducing the $\sqrt{T/\overline{M}}$ term governing exhaust velocity.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Fig2_penalty.png}
+  \caption{Performance penalty imposed by ADN decomposition diluents 
+  relative to pure O\textsubscript{2} baseline. 
+  (a) Combustion temperature reduction. 
+  (b) Specific impulse reduction.}
+  \label{fig:penalty}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{LMP-103S diluent penalty relative to pure O\textsubscript{2} 
+baseline at $P_c = 25$~bar.}
+\label{tab:penalty}
+\begin{tabular}{llrrrrr}
+\toprule
+Fuel & Metric & O/F=2 & O/F=4 & O/F=6 & O/F=8 & O/F=10 \\
+\midrule
+\multirow{2}{*}{Ethanol} 
+  & $\Delta T_c$ (\%) & 69.1 & 59.6 & 46.8 & 36.0 & 25.3 \\
+  & $\Delta I_{sp}$ (\%) & 39.6 & 27.0 & 16.0 & 7.9 & 0.7 \\
+\midrule
+\multirow{2}{*}{RP-1}    
+  & $\Delta T_c$ (\%) & 68.9 & 68.0 & 59.0 & 49.7 & 41.6 \\
+  & $\Delta I_{sp}$ (\%) & 42.8 & 36.1 & 26.2 & 18.0 & 11.6 \\
+\midrule
+\multirow{2}{*}{Methane} 
+  & $\Delta T_c$ (\%) & 66.7 & 71.4 & 68.0 & 61.0 & 52.0 \\
+  & $\Delta I_{sp}$ (\%) & 45.9 & 42.5 & 36.1 & 28.2 & 20.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Exhaust Composition Analysis}
+
+Figure~\ref{fig:exhaust} presents the equilibrium exhaust composition 
+for ethanol fuel with both oxidisers. The LMP-103S panel reveals a 
+persistent N\textsubscript{2} fraction of 20--35\% across all O/F 
+ratios — inert diluent sourced entirely from ADN decomposition that 
+absorbs thermal energy without contributing to thrust generation. 
+At O/F~=~6, N\textsubscript{2} constitutes 29.8\% of exhaust mole 
+fraction, equivalent to carrying approximately 30\% dead mass through 
+the nozzle expansion process. In contrast, the pure O\textsubscript{2} 
+panel shows no N\textsubscript{2} and a combustion product distribution 
+dominated by H\textsubscript{2}O and CO\textsubscript{2} at high O/F, 
+consistent with complete oxidation.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{fig6a_exhaust_species.png}
+  \caption{Equilibrium exhaust mole fraction composition for ethanol 
+  fuel with LMP-103S (left) and pure O\textsubscript{2} (right) 
+  oxidisers at $P_c = 25$~bar. Note the persistent N\textsubscript{2} 
+  fraction in LMP-103S exhaust across all O/F ratios.}
+  \label{fig:exhaust}
+\end{figure}
+
+\subsection{Effect of Chamber Pressure}
+
+Figure~\ref{fig:pressure} presents the effect of chamber pressure 
+on $I_{sp}$ and $c^*$ at fixed O/F~=~6. Increasing chamber pressure 
+from 10 to 40~bar improves $I_{sp}$ from 160.0 to 190.4~s for 
+ethanol/LMP-103S — a 19.0\% improvement. 
+
+Notably, $c^*$ remains constant at 1240.5~m/s across all pressures 
+for LMP-103S systems, confirming that combustion thermochemistry is 
+pressure-independent at chemical equilibrium. The $I_{sp}$ improvement 
+derives entirely from improved nozzle expansion efficiency at higher 
+pressure ratios. This result underscores the importance of maximising 
+chamber pressure in LMP-103S bipropellant thruster design.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Fig3_pressure.png}
+  \caption{Effect of chamber pressure on performance at O/F~=~6. 
+  (a) Specific impulse increases with pressure due to improved 
+  nozzle expansion. (b) Characteristic velocity $c^*$ is 
+  pressure-independent, confirming equilibrium thermochemistry.}
+  \label{fig:pressure}
+\end{figure}
+
+\subsection{Monte Carlo Uncertainty Analysis}
+
+Figure~\ref{fig:mc} presents Monte Carlo results ($N=500$) for 
+the nominal operating condition (ethanol/LMP-103S, O/F~=~6, 
+$P_c = 25$~bar). Results yield: $T_c = 1686 \pm 76$~K (CV~=~4.52\%), 
+$I_{sp} = 181.7 \pm 3.8$~s (CV~=~2.08\%), $c^* = 1241 \pm 24$~m/s 
+(CV~=~1.94\%).
+
+The coefficient of variation below 4.5\% across all performance 
+metrics confirms model robustness to realistic input uncertainties. 
+The higher CV for chamber temperature (4.52\%) compared to $I_{sp}$ 
+(2.08\%) reflects the nonlinear temperature sensitivity to composition 
+variation. The 95\% confidence interval for $I_{sp}$ spans 
+174.1--189.0~s, providing statistically rigorous performance bounds 
+for design-stage analysis.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Fig4_montecarlo.png}
+  \caption{Monte Carlo uncertainty analysis for ethanol/LMP-103S 
+  at O/F~=~6, $P_c = 25$~bar, $N = 500$ samples. Input 
+  uncertainties: composition $\pm 5\%$, pressure $\pm 1$~bar, 
+  O/F ratio $\pm 0.2$.}
+  \label{fig:mc}
+\end{figure}
+
+\subsection{Mission-Level Implications}
+
+Figure~\ref{fig:mission} and Table~\ref{tab:mission} present 
+propellant mass penalties for a 500~kg spacecraft across 
+representative mission scenarios.
+
+Ethanol/LMP-103S incurs minimal penalties: $+0.28$~kg ($+0.7\%$) 
+for LEO circularisation to $+1.35$~kg ($+0.5\%$) for GTO-to-GEO 
+transfer. These penalties are negligible from a mission design 
+perspective and are likely offset by LMP-103S handling and 
+storage advantages over conventional oxidisers.
+
+Methane/LMP-103S imposes substantial penalties: $+8.53$~kg 
+($+24.4\%$) for LEO and $+40.94$~kg ($+15.9\%$) for 
+GTO-to-GEO. For a 500~kg spacecraft, this represents 8.2\% 
+of initial wet mass — a significant constraint for 
+volume-limited platforms.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Fig5_mission.png}
+  \caption{Mission-level propellant mass comparison, 
+  $m_{wet} = 500$~kg. (a) Extra propellant mass penalty 
+  vs mission $\Delta v$. (b) Propellant mass for 
+  GTO-to-GEO transfer ($\Delta v = 1500$~m/s).}
+  \label{fig:mission}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Propellant mass penalties for LMP-103S vs pure 
+O\textsubscript{2}, $m_{wet} = 500$~kg.}
+\label{tab:mission}
+\begin{tabular}{llrrrr}
+\toprule
+Mission & $\Delta v$ (m/s) & \multicolumn{3}{c}{Extra propellant mass (kg)} \\
+\cmidrule{3-5}
+ & & Ethanol & RP-1 & Methane \\
+\midrule
+LEO Circularisation   & 150  & +0.28 & +4.54  & +8.53  \\
+Deep Space Correction & 300  & +0.52 & +8.39  & +15.72 \\
+Lunar Orbit Insertion & 900  & +1.12 & +18.30 & +34.02 \\
+Mars Orbit Insertion  & 900  & +1.12 & +18.30 & +34.02 \\
+GTO to GEO            & 1500 & +1.35 & +22.19 & +40.94 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Density Impulse Analysis}
+
+Figure~\ref{fig:dimp} presents density impulse 
+($I_{sp,d} = I_{sp} \times \rho_{mix}$) as a function of O/F ratio. 
+A counter-intuitive finding emerges: at O/F~=~10, ethanol/LMP-103S 
+achieves $I_{sp,d} = 221{,}887$~s$\cdot$kg/m\textsuperscript{3}, 
+exceeding ethanol/pure O\textsubscript{2} at the same O/F 
+(207{,}808~s$\cdot$kg/m\textsuperscript{3}) by 6.8\%.
+
+This reversal arises because LMP-103S mixture density (1240~kg/m\textsuperscript{3}) 
+exceeds liquid oxygen density (1140~kg/m\textsuperscript{3}), and 
+at high O/F ratios the density advantage outweighs the $I_{sp}$ 
+deficit. For volume-constrained spacecraft such as CubeSats where 
+tank volume is the primary design constraint, ethanol/LMP-103S at 
+high O/F ratios may offer superior volumetric performance to 
+conventional O\textsubscript{2}-based systems.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{fig7_density_impulse.png}
+  \caption{Density impulse ($I_{sp} \times \rho_{mix}$) as a 
+  function of O/F ratio. Ethanol/LMP-103S exceeds ethanol/pure 
+  O\textsubscript{2} at O/F~=~10, demonstrating a volumetric 
+  performance advantage for high-density oxidiser applications.}
+  \label{fig:dimp}
+\end{figure}
+
+\subsection{Model Limitations}
+The present analysis employs chemical equilibrium assumption, 
+which represents the theoretical maximum performance by assuming 
+complete reaction at infinite residence time. Real combustion 
+chambers exhibit finite-rate kinetic effects, particularly at 
+low chamber pressures and for ADN decomposition intermediates 
+not captured by GRI-Mech 3.0. Additionally, fuel species are 
+represented by GRI-Mech surrogates (C\textsubscript{2}H\textsubscript{4} 
+for ethanol and RP-1) which may introduce small systematic 
+deviations in C:H:O ratios. Future work employing ADN-specific 
+reaction mechanisms and finite-rate chemistry solvers will 
+quantify these deviations.
+%% ── 4. CONCLUSIONS ─────────────────────────────────────────
+\section{Conclusions}
+
+This study quantifies, for the first time using 
+open-source combustion modelling tools, the performance 
+penalty imposed by ADN decomposition diluents in 
+LMP-103S bipropellant systems. 
+Key conclusions are:
+
+\begin{enumerate}
+\item ADN decomposition diluents impose mean Isp 
+penalties of 18.2\%, 26.9\%, and 34.6\% for ethanol, 
+RP-1, and methane fuels respectively, relative to a 
+pure O\textsubscript{2} baseline.
+
+\item The penalty is strongly O/F-dependent: 
+ethanol/LMP-103S achieves near-parity with pure 
+O\textsubscript{2} performance at O/F=10 
+(0.7\% Isp penalty), identifying an optimal 
+operating regime that minimises diluent effects.
+
+\item Chamber pressure significantly mitigates the 
+diluent penalty: increasing from 10 to 40 bar 
+improves Isp by approximately 19\% for all fuel 
+combinations.
+
+\item Monte Carlo uncertainty analysis confirms 
+model robustness with Isp coefficient of variation 
+below 2.1\%, validating the equilibrium modelling 
+approach for design-stage analysis.
+
+\item At the mission level, ethanol is identified 
+as the optimal fuel pairing for LMP-103S bipropellant 
+configurations in high-$\Delta v$ applications, 
+with propellant mass penalties below 1\% for 
+GTO-class missions.
+\end{enumerate}
+
+Future work will extend this analysis to finite-rate 
+combustion kinetics using ADN-specific reaction 
+mechanisms, and integrate the performance model 
+into a Digital Twin framework for real-time 
+combustion chamber health monitoring.
+
+%% ── REFERENCES ─────────────────────────────────────────────
+\bibliographystyle{elsarticle-num}
+\begin{thebibliography}{9}
+
+\bibitem{Larsson2011}
+A. Larsson, N. Wingborg, 
+``Green Propellants Based on Ammonium Dinitramide (ADN),'' 
+in \textit{Advances in Spacecraft Technologies}, 
+InTech, 2011.
+
+\bibitem{Bombelli2020}
+A. Bombelli et al., 
+``Green Propulsion Advancement,'' 
+\textit{AIAA Propulsion and Energy Forum}, 2020.
+
+\bibitem{GPIM2019}
+C.~McLean et al., ``NASA's Green Propellant Infusion Mission,'' 
+\textit{AIAA Propulsion and Energy Forum}, 2019.
+
+\bibitem{Cantera2023}
+D. G. Goodwin et al., 
+``Cantera: An Object-oriented Software Toolkit for 
+Chemical Kinetics, Thermodynamics, and Transport Processes,'' 
+Version 3.0, 2023. 
+doi:10.5281/zenodo.8137090
+
+\bibitem{Sharon2021}
+B. M. Sharon Rose, G. Srilochan, 
+``Hydrogen Peroxide Based Green Propellants for Future 
+Space Propulsion Applications,'' 
+M.Sc. Thesis, Politecnico di Milano, 2021.
+
+\bibitem{GRI30}
+G. P. Smith et al., 
+``GRI-Mech 3.0,'' 
+\url{http://www.me.berkeley.edu/gri_mech/}
+
+\end{thebibliography}
+
+\end{document}
