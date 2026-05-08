@@ -47,3 +47,49 @@ LSTM fault detection.
 ---
 
 ## Repository Structure
+├── notebooks/
+│   ├── Paper1_LMP103S_Thermochemical_Analysis.ipynb
+│   └── Paper2_DigitalTwin_Combustion.ipynb
+├── figures/
+│   ├── Fig1_performance_comparison.png
+│   ├── Fig2_diluent_penalty.png
+│   ├── Fig3_pressure_effect.png
+│   ├── Fig4_monte_carlo.png
+│   ├── Fig5_mission_trade.png
+│   └── dt_fig1-5_*.png
+├── data/
+│   └── combustion_dt_dataset.csv
+└── README.md
+
+---
+
+## Technical Stack
+
+- **Thermochemical modelling:** Cantera 3.2.0, GRI-Mech 3.0
+- **ML framework:** TensorFlow/Keras 2.20
+- **Scientific computing:** NumPy, SciPy, Pandas
+- **Visualisation:** Matplotlib
+
+---
+
+## Citation
+
+If you use this work, please cite:
+
+Gahlot, P. (2026). "Thermochemical Performance Analysis of LMP-103S 
+Green Propellant Bipropellant Combinations: Quantification of ADN 
+Decomposition Diluent Penalties via Cantera Equilibrium Modelling." 
+*Acta Astronautica* (under review).
+
+---
+
+## Contact
+
+prashant.gahlot@studio.unibo.it  
+[LinkedIn](https://linkedin.com/in/prashant-gahlot)  
+AIAA Member No. 1749577
+
+## Note on Data and Models
+The full training dataset (65,000 samples) is included in `data/`.
+The trained LSTM model weights are available on request due to file size constraints.
+
